@@ -110,3 +110,36 @@ import hello_pb2_grpc
 ### Conclusion
 
 The extension of the gRPC service to include `WarehouseData` and the addition of a Python client serves as a testament to gRPC's powerful cross-language capabilities. It demonstrates how seamlessly services can be extended and how different components can be integrated to provide a comprehensive system that meets evolving business needs.
+
+# Client Health Check Implementation
+
+## Overview
+
+The implementation focused on establishing a Python gRPC server and client communication, particularly around health check mechanisms. The goal was to simulate health check pings from the server to the client, with the client responding back indicating its health status. Additionally, we aimed to log these interactions, both "healthy" responses and "no response" scenarios, to a file for persistence and monitoring.
+
+## Implementation Details
+
+### Server
+
+- The server consists of two main services: `HelloWorldService` for basic greeting and warehouse data requests, and `HealthCheckService` for conducting health checks.
+- `HealthCheckService` uses bi-directional streaming to continuously send health check pings and receive responses from clients. It logs every health check response ("healthy") from clients and periodically checks for clients that haven't responded within a predefined timeout, logging these as "no response".
+- Health check logs are written to `health_checks.log`, with each log entry containing the client ID, the timestamp of the response or timeout check, and the health status ("healthy" or "no response").
+
+### Client
+
+- The client establishes a connection to the server and performs two main functions: responding to the server's greeting and warehouse data requests, and participating in the health check process.
+- For health checks, the client uses a generator function to periodically send "healthy" status responses to the server. The frequency of these responses is set to match the server's health check ping rate.
+
+## Challenges Encountered
+
+### Method Name Case Sensitivity
+
+Initially, method names mismatch between the client and server due to case sensitivity caused the gRPC framework to report "Method not implemented" errors. This issue was resolved by ensuring method names in client stubs exactly matched those defined in the server and `.proto` files.
+
+### Health Check Response Mechanism
+
+The original client-side implementation incorrectly used the same `StreamObserver` instance for both sending health check responses and receiving server requests, leading to redundancy and potential infinite loops. The correct approach involved separating the concerns: the client uses the `StreamObserver` provided by the server call to respond to health checks, while the server maintains a mapping of client IDs to their respective `StreamObserver` instances for outgoing pings.
+
+### Logging Mechanism
+
+The initial implementation printed health check statuses to the console. The requirement to log these statuses to a file introduced the need for a file writing mechanism that handles concurrent write operations safely. The final implementation includes synchronized file access to append log entries without data corruption.

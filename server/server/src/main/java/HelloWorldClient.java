@@ -1,37 +1,53 @@
-import hello.Hello;
-import hello.HelloWorldServiceGrpc;
+import com.google.protobuf.Timestamp;
+import hello.HealthCheckServiceGrpc;
+import hello.Hello.PingMessage;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
 
 public class HelloWorldClient {
+    private static final String CLIENT_ID = "clientXXXXXX";
 
-    public static void main(String[] args) {
-        // Initialize the gRPC channel
+    public static void main(String[] args) throws InterruptedException {
         ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 50051)
                 .usePlaintext()
                 .build();
 
-        // Create a blocking stub for making synchronous RPC calls
-        HelloWorldServiceGrpc.HelloWorldServiceBlockingStub stub = HelloWorldServiceGrpc.newBlockingStub(channel);
+        HealthCheckServiceGrpc.HealthCheckServiceStub healthStub = HealthCheckServiceGrpc.newStub(channel);
 
-        // Make a request to the hello service
-        Hello.HelloResponse helloResponse = stub.hello(Hello.HelloRequest.newBuilder()
-                .setFirstname("Max")
-                .setLastname("Mustermann")
-                .build());
+        StreamObserver<PingMessage> responseObserver = healthStub.checkHealth(new StreamObserver<PingMessage>() {
+            @Override
+            public void onNext(PingMessage ping) {
+                System.out.println("Received health check from server for client ID: " + ping.getClientID());
+                // Immediately respond indicating health
+                Timestamp now = Timestamp.newBuilder()
+                        .setSeconds(System.currentTimeMillis() / 1000)
+                        .setNanos((int) ((System.currentTimeMillis() % 1000) * 1000000)).build();
 
-        // Print the response from the hello service
-        System.out.println(helloResponse.getText());
+                PingMessage response = PingMessage.newBuilder()
+                        .setClientID(CLIENT_ID)
+                        .setTimestamp(now)
+                        .setStatus("healthy") // Indicating this client is healthy
+                        .build();
 
-        // Make a request for warehouse data
-        Hello.WarehouseData warehouseData = stub.requestWarehouseData(Hello.WarehouseRequest.newBuilder()
-                .setWarehouseID("warehouse123")
-                .build());
+                // Correct way to respond back to the server
+                this.onNext(response); // Incorrect usage causing the redundancy error
+            }
 
-        // Print the warehouse data response
-        System.out.println("Warehouse Data: " + warehouseData.toString());
+            @Override
+            public void onError(Throwable t) {
+                System.err.println("Health check stream error: " + t.getMessage());
+                channel.shutdown();
+            }
 
-        // Shutdown the channel
-        channel.shutdown();
+            @Override
+            public void onCompleted() {
+                System.out.println("Server has completed health checks.");
+                channel.shutdownNow();
+            }
+        });
+
+        // To keep the client alive to send and receive messages.
+        Thread.sleep(Long.MAX_VALUE);
     }
 }

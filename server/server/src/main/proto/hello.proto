@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package hello;
 
-// Import statements for timestamp if needed
 import "google/protobuf/timestamp.proto";
 
 message Product {
@@ -36,4 +35,17 @@ message HelloRequest {
 
 message HelloResponse {
   string text = 1;
+}
+
+// Health check messages
+message PingMessage {
+  string clientID = 1;
+  google.protobuf.Timestamp timestamp = 2; // Timestamp when the Ping was sent or responded to
+  // Additional field to indicate health status or leave empty for server-initiated pings
+  string status = 3; // "healthy" for client responses, or "no response" for server-logged failures
+}
+
+// Health check service using bi-directional streaming for continuous communication
+service HealthCheckService {
+  rpc CheckHealth(stream PingMessage) returns (stream PingMessage);
 }
